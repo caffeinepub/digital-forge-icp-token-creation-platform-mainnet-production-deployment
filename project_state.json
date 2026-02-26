@@ -1,0 +1,185 @@
+{
+  "schemaVersion": "1.0.0",
+  "projectStateVersion": 9,
+  "summary": "Digital Forge ICP — A token factory platform on the Internet Computer. Single-file Motoko backend (1,819 lines) creates ForgedToken canisters on demand via IC Management Canister, collects fees via ICRC-2 approve/transferFrom on the ICP ledger, implements 6 tax mechanisms (treasury, burn, reflection, liquidity, yield, support), x404 payment rails (150 BPS additive), inline access control, rate limiting, and input sanitization. Treasury: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae.",
+  "architectural_notes": [
+    "Single-file Motoko backend (backend/main.mo) — no external modules, only mo:base imports",
+    "Token factory creates ForgedToken canisters via IC Management Canister (aaaaa-aa)",
+    "Fee collection via ICRC-2 transferFrom on ICP ledger (ryjl3-tyaaa-aaaaa-aaaba-cai)",
+    "x404 payment rails: 150 BPS additive fee on all operations forwarded to treasury",
+    "6 tax mechanisms: treasury, burn, reflection, liquidity, yield, support (max 25% total buy or sell)",
+    "Hardcoded treasury: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae",
+    "Transient HashMaps serialized to persistent arrays in preupgrade/postupgrade hooks",
+    "Token Wasm uploaded post-deploy via chunked upload (startWasmUpload/uploadWasmChunk/finalizeWasmUpload)",
+    "Inline access control with admin/user/guest roles; guests auto-promoted to user on profile save",
+    "Rate limiting on token creation (30s), payments (5s), views (1min), comments (10s)"
+  ],
+  "known_issues": [
+    "`transient` keyword is non-standard Motoko and must be adapted to standard stable/non-stable variable patterns to compile",
+    "Frontend getForgedTokens() call returns undefined/non-array — mismatch between frontend actor call and backend function name or return format",
+    "TREASURY_ADDRESS and DEVELOPER_WALLET constants were set to wrong hex strings instead of the correct ICP principal"
+  ],
+  "isFixRequest": true,
+  "existing_features": [
+    {
+      "id": "feature-ensure-the-frontend-app-tsx-routing-covers-all-five-views-home-create-dashboard-forged-lookup-and-that-all-react-query-hooks-in-usequeries-ts-correctly-map-to-the-updated-backend-actor-interface-after-the-transient-fix-no-function-signatures-should-have-changed-so-verify-hook-calls-match-backend-public-methods",
+      "title": "Ensure the frontend App.tsx routing covers all five views (home, create, dashboard, forged, lookup) and that all React Query hooks in useQueries.ts correctly map to the updated backend actor interface after the transient fix. No function signatures should have changed, so verify hook calls match backend public methods.",
+      "reqIds": [
+        "REQ-2"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-apply-a-dark-forge-metallurgy-inspired-visual-theme-consistently-across-all-pages-deep-charcoal-and-obsidian-backgrounds-molten-orange-and-amber-accent-colors-for-ctas-and-highlights-steel-grey-typography-anvil-flame-motif-influences-in-section-headers-and-cards-ensure-the-theme-is-coherent-across-header-footer-homepage-hero-dashboard-stats-cards-forgedtokens-list-createtokenwizard-steps-and-tokenlookup-page",
+      "title": "Apply a dark forge/metallurgy-inspired visual theme consistently across all pages: deep charcoal and obsidian backgrounds, molten orange and amber accent colors for CTAs and highlights, steel-grey typography, anvil/flame motif influences in section headers and cards. Ensure the theme is coherent across Header, Footer, HomePage hero, Dashboard stats cards, ForgedTokens list, CreateTokenWizard steps, and TokenLookup page.",
+      "reqIds": [
+        "REQ-3"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-tokenlookup-tsx-change-the-search-input-placeholder-text-from-0x-to-xxxxx-xxxxx-xxxxx-xxxxx-cai-to-reflect-icp-canister-id-format-instead-of-evm-address-format",
+      "title": "In TokenLookup.tsx, change the search input placeholder text from '0x...' to 'xxxxx-xxxxx-xxxxx-xxxxx-cai' to reflect ICP canister ID format instead of EVM address format.",
+      "reqIds": [
+        "REQ-4"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-fix-the-tokens-data-is-not-an-array-undefined-console-error-on-the-forged-tokens-page-audit-the-usegetforgedtokens-hook-in-usequeries-ts-to-confirm-the-actor-call-matches-the-exact-backend-public-method-name-if-the-backend-exposes-a-differently-named-function-e-g-listforgedtokens-getalltokens-gettokens-update-the-frontend-call-to-match-also-ensure-the-response-is-correctly-unwrapped-if-the-backend-returns-a-variant-result-or-nested-object-rather-than-a-bare-array-add-the-appropriate-unwrapping-logic-before-passing-data-to-the-forgedtokens-page-component",
+      "title": "Fix the 'Tokens data is not an array: undefined' console error on the Forged Tokens page. Audit the useGetForgedTokens hook in useQueries.ts to confirm the actor call matches the exact backend public method name. If the backend exposes a differently named function (e.g. listForgedTokens, getAllTokens, getTokens), update the frontend call to match. Also ensure the response is correctly unwrapped — if the backend returns a variant, Result, or nested object rather than a bare array, add the appropriate unwrapping logic before passing data to the ForgedTokens page component.",
+      "reqIds": [
+        "REQ-5"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-on-the-forge-a-token-button-present-in-homepage-tsx-and-any-other-location-where-it-appears-when-no-wallet-is-connected-display-a-visible-inline-message-or-tooltip-reading-connect-wallet-to-forge-tokens-instead-of-silently-doing-nothing-the-button-should-remain-visible-but-indicate-the-wallet-requirement-clearly-to-the-user",
+      "title": "On the 'Forge a Token' button (present in HomePage.tsx and any other location where it appears), when no wallet is connected, display a visible inline message or tooltip reading 'Connect wallet to forge tokens' instead of silently doing nothing. The button should remain visible but indicate the wallet requirement clearly to the user.",
+      "reqIds": [
+        "REQ-6"
+      ],
+      "version": 1
+    },
+    {
+      "id": "feature-in-frontend-src-hooks-usequeries-ts-add-react-query-hooks-for-the-three-new-backend-query-functions-usegettokencount-usegettreasuryaddress-and-usegetcreationfee-ensure-they-call-the-corresponding-actor-methods-and-handle-anonymous-actor-access-correctly",
+      "title": "In frontend/src/hooks/useQueries.ts, add React Query hooks for the three new backend query functions: useGetTokenCount(), useGetTreasuryAddress(), and useGetCreationFee(). Ensure they call the corresponding actor methods and handle anonymous actor access correctly.",
+      "reqIds": [
+        "REQ-12"
+      ],
+      "version": 1
+    }
+  ],
+  "new_feature_requests": [
+    {
+      "id": "AR-1",
+      "summary": "Adapt the existing backend/main.mo DigitalForgeICP actor so it compiles correctly on the Internet Computer by replacing all `transient` keyword usages (on paymentLockMap/paymentLocks and creationTimeMap/lastTokenCreation HashMaps) with standard non-stable var declarations, preserving all existing logic: access control initialization, token creation with fee validation and rate limiting, payment recording/verification, blob storage mixins, 6 tax mechanisms (treasury, burn, reflection, liquidity, yield, support), x404 payment rails (150 BPS additive), inline access control, and input sanitization. Treasury address: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae. Keep all constants (MINT_FEE_AMOUNT=1_000_000_000, MIN_TOTAL_TAX=25, MAX_TOTAL_TAX=2500, PAYMENT_VALIDITY_WINDOW=3_600_000_000_000, TOKEN_CREATION_RATE_LIMIT=30_000_000_000) intact.",
+      "reqIds": [
+        "REQ-1"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-3",
+      "summary": "Fix 'Tokens data is not an array: undefined' error on Forged Tokens page — ensure frontend getForgedTokens() actor call matches backend function name and handles returned data structure correctly",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-4",
+      "summary": "Show 'Connect wallet to forge tokens' message on the Forge a Token button when no wallet is connected, instead of silently doing nothing",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-5",
+      "summary": "Fix wrong treasury address — change TREASURY_ADDRESS and getBuyMeACoffeeAddress() from hex string to correct ICP principal: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-6",
+      "summary": "Fix wrong DEVELOPER_WALLET constant — change to iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae (same as treasury for now)",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-7",
+      "summary": "Fix initializeAccessControl() lock — allow treasury principal to force-add themselves as admin without wiping existing roles, even if already initialized",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-8",
+      "summary": "Make getAllTokens() accessible to anonymous/unregistered callers — remove registration gate from all public token read functions",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-9",
+      "summary": "Add missing backend query functions: getTokenCount() returns Nat, getTreasuryAddress() returns Text, getCreationFee() returns Nat",
+      "reqIds": [],
+      "status": "pending"
+    },
+    {
+      "id": "AR-10",
+      "summary": "In backend/main.mo, change the TREASURY_ADDRESS constant and getBuyMeACoffeeAddress() return value from the incorrect hex string to the correct ICP principal: \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". This is the highest-priority fix — all fee collection depends on this being correct.",
+      "reqIds": [
+        "REQ-7"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-11",
+      "summary": "In backend/main.mo, change the DEVELOPER_WALLET constant from the incorrect hex string to \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\" (same as treasury for now).",
+      "reqIds": [
+        "REQ-8"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-12",
+      "summary": "In backend/main.mo, modify initializeAccessControl() so that if the caller is the treasury principal (\"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\"), they can force-add themselves as admin even after the function has already been called once. Do NOT reset or wipe any existing roles — only add the treasury principal to the admin role if they are not already present. All other existing access control assignments must remain untouched.",
+      "reqIds": [
+        "REQ-9"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-13",
+      "summary": "In backend/main.mo, remove the registration gate from getAllTokens() (and any other public token read functions). getAllTokens() must return the full token list to any caller, including anonymous and unregistered principals, without requiring prior registration or profile creation.",
+      "reqIds": [
+        "REQ-10"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-14",
+      "summary": "In backend/main.mo, add three missing public query functions: getTokenCount() returns the total count of registered tokens as Nat; getTreasuryAddress() returns the treasury principal as Text; getCreationFee() returns the mint fee amount as Nat.",
+      "reqIds": [
+        "REQ-11"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-15",
+      "summary": "In backend/main.mo, find and replace every occurrence of the hex string \"ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936\" with the ICP principal \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". This includes but is not limited to the TREASURY_ADDRESS constant, the getBuyMeACoffeeAddress() return value, and getTreasuryAddress() return value. No instance of the old hex string should remain anywhere in the file.",
+      "reqIds": [
+        "REQ-13"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-16",
+      "summary": "In backend/main.mo, replace the DEVELOPER_WALLET constant value \"f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256\" with the ICP principal \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". No instance of the old developer wallet hex string should remain in the file.",
+      "reqIds": [
+        "REQ-14"
+      ],
+      "status": "pending"
+    }
+  ],
+  "gameProjectType": "none",
+  "projectName": "Digital Forge ICP",
+  "clarification_mode": "instant",
+  "clarification_rounds": 0
+}

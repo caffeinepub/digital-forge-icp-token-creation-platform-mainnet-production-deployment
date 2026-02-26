@@ -1,0 +1,13 @@
+{
+  "kind": "spec_vs_diff_report",
+  "version": "1.0",
+  "generatedAt": "2026-02-26T20:57:44.240Z",
+  "summary": "Both REQ-13 and REQ-14 appear to be fully implemented in backend/main.mo. The TREASURY_ADDRESS constant is set to the new ICP principal, the DEVELOPER_WALLET constant is set to the new ICP principal, and no old hex strings are visible in the diff. The project_state.json summary also references the new treasury principal, confirming the change.",
+  "missing_requirements": [],
+  "hallucinated_features": [],
+  "confidence": 0.9,
+  "changed_files": [
+    "backend/main.mo",
+    "project_state.json"
+  ]
+}

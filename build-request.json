@@ -1,0 +1,59 @@
+{
+  "kind": "build_request",
+  "title": "Fix treasury address and developer wallet constants in backend",
+  "projectName": "Digital Forge ICP",
+  "priority": "high",
+  "requirements": [
+    {
+      "id": "REQ-13",
+      "text": "In backend/main.mo, find and replace every occurrence of the hex string \"ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936\" with the ICP principal \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". This includes but is not limited to the TREASURY_ADDRESS constant, the getBuyMeACoffeeAddress() return value, and getTreasuryAddress() return value. No instance of the old hex string should remain anywhere in the file.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "Change EVERY occurrence of that hex string in the backend to this ICP principal: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae",
+          "Both getBuyMeACoffeeAddress() and getTreasuryAddress() return \"ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936\""
+        ]
+      },
+      "acceptanceCriteria": [
+        "The string \"ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936\" does not appear anywhere in backend/main.mo",
+        "Calling getTreasuryAddress() returns \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\"",
+        "Calling getBuyMeACoffeeAddress() returns \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\"",
+        "The TREASURY_ADDRESS constant is set to \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\""
+      ]
+    },
+    {
+      "id": "REQ-14",
+      "text": "In backend/main.mo, replace the DEVELOPER_WALLET constant value \"f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256\" with the ICP principal \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". No instance of the old developer wallet hex string should remain in the file.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-4"
+        ],
+        "quotes": [
+          "Also change the DEVELOPER_WALLET from \"f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256\" to \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\""
+        ]
+      },
+      "acceptanceCriteria": [
+        "The string \"f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256\" does not appear anywhere in backend/main.mo",
+        "The DEVELOPER_WALLET constant is set to \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\""
+      ]
+    }
+  ],
+  "constraints": [
+    "Do not change any other logic, constants, or function signatures in backend/main.mo beyond the two address/wallet replacements specified",
+    "These are principal IDs (text), not account IDs (hex) — store and return them as Text values"
+  ],
+  "nonGoals": [
+    "Changing any frontend code",
+    "Modifying initializeAccessControl() behavior",
+    "Altering fee amounts or rate limiting constants",
+    "Any other backend logic changes beyond the two string replacements"
+  ],
+  "imageRequirements": {
+    "required": [],
+    "edits": []
+  }
+}
