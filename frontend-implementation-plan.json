@@ -1,6 +1,6 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Fix treasury address and developer wallet constants in backend",
+  "title": "Frontend Implementation Plan: Treasury Address Update",
   "requirements": []
 }

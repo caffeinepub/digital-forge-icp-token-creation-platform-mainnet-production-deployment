@@ -30,44 +30,55 @@ actor DigitalForgeICP {
   let PAYMENT_VALIDITY_WINDOW : Time.Time = 3_600_000_000_000; // 1 hour in nanoseconds
   let TOKEN_CREATION_RATE_LIMIT : Time.Time = 30_000_000_000; // 30 seconds
 
-  // Track initialization to prevent re-initialization attacks
+  // Hardcoded permanent admin principal - must always have admin role
+  let HARDCODED_ADMIN_PRINCIPAL : Text = "r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae";
+
   var isInitialized : Bool = false;
-
-  // Track payment usage to prevent race conditions
   var paymentLocks = OrderedMap.Make<Nat>(Nat.compare).empty<Bool>();
-
-  // Track token creation rate limiting
   var lastTokenCreation = OrderedMap.Make<Text>(Text.compare).empty<Time.Time>();
 
-  // Helper function to sanitize text input
   func sanitizeText(input : Text) : Text {
     let chars = Text.toArray(input);
     let sanitized = Array.filter<Char>(chars, func(c : Char) : Bool {
       let code = Char.toNat32(c);
-      // Allow alphanumeric, spaces, and common punctuation
       (code >= 32 and code <= 126) or code == 10 or code == 13
     });
     Text.fromArray(sanitized);
   };
 
-  // Helper function to check if caller is the whitelisted developer wallet
   func isDeveloperWallet(caller : Principal) : Bool {
     Principal.toText(caller) == DEVELOPER_WALLET;
   };
 
-  // Helper function to log errors with context
   func logError(context : Text, error : Text, caller : Principal) {
     Debug.print("ERROR [" # context # "] Caller: " # Principal.toText(caller) # " | " # error);
+  };
+
+  // Ensure the hardcoded admin always has the admin role.
+  // This is called after AccessControl.initialize so that the initializing caller
+  // is already an admin and can assign roles.
+  func ensureHardcodedAdmin(initializingCaller : Principal) {
+    let hardcodedAdmin = Principal.fromText(HARDCODED_ADMIN_PRINCIPAL);
+    AccessControl.assignRole(
+      accessControlState,
+      initializingCaller,
+      hardcodedAdmin,
+      #admin,
+    );
   };
 
   public shared ({ caller }) func initializeAccessControl() : async () {
     let isTreasuryPrincipal = Principal.toText(caller) == TREASURY_ADDRESS;
     if (not isInitialized or isTreasuryPrincipal) {
-      // Allow treasury principal to force add themselves as admin
       if (Principal.isAnonymous(caller)) {
         Debug.trap("Unauthorized: Anonymous principals cannot initialize access control");
       };
+      // First call to initialize makes caller an admin
       AccessControl.initialize(accessControlState, caller);
+
+      // Ensure the hardcoded permanent admin is always assigned
+      ensureHardcodedAdmin(caller);
+
       isInitialized := true;
     } else {
       Debug.trap("Unauthorized: Access control already initialized");
@@ -79,22 +90,24 @@ actor DigitalForgeICP {
   };
 
   public shared ({ caller }) func assignCallerUserRole(user : Principal, role : AccessControl.UserRole) : async () {
-    // AUTHORIZATION: Ensure system is initialized
     if (not isInitialized) {
       Debug.trap("Unauthorized: Access control not initialized");
     };
 
-    // AUTHORIZATION: Prevent assigning roles to anonymous principals
     if (Principal.isAnonymous(user)) {
       Debug.trap("Unauthorized: Cannot assign roles to anonymous principals");
     };
 
-    // AUTHORIZATION: Prevent anonymous callers
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous principals cannot assign roles");
     };
 
-    // AUTHORIZATION: Only admins can assign roles (enforced in AccessControl.assignRole)
+    // Prevent removing admin role from the hardcoded admin
+    if (Principal.toText(user) == HARDCODED_ADMIN_PRINCIPAL and role != #admin) {
+      Debug.trap("Unauthorized: Cannot remove admin role from the permanent hardcoded admin");
+    };
+
+    // Admin-only check is enforced inside AccessControl.assignRole
     AccessControl.assignRole(accessControlState, caller, user, role);
   };
 
@@ -114,7 +127,6 @@ actor DigitalForgeICP {
 
   var userProfiles = OrderedMap.Make<Principal>(Principal.compare).empty<UserProfile>();
 
-  // Helper function to find a profile by principal
   func findProfileByPrincipal(principal : Principal) : ?UserProfile {
     for ((_, profile) in OrderedMap.Make<Principal>(Principal.compare).entries(userProfiles)) {
       for (linkedPrincipal in profile.linkedPrincipals.vals()) {
@@ -126,7 +138,6 @@ actor DigitalForgeICP {
     null;
   };
 
-  // Helper function to link a principal to an existing profile
   func linkPrincipalToProfile(profile : UserProfile, principal : Principal) : UserProfile {
     let alreadyLinked = Array.find<Principal>(profile.linkedPrincipals, func(p) { p == principal });
     switch (alreadyLinked) {
@@ -141,27 +152,26 @@ actor DigitalForgeICP {
   };
 
   public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    // AUTHORIZATION: Anonymous principals cannot have profiles
     if (Principal.isAnonymous(caller)) {
       return null;
     };
 
-    // First, try to find a direct match
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Debug.trap("Unauthorized: Only users can view profiles");
+    };
+
     switch (OrderedMap.Make<Principal>(Principal.compare).get(userProfiles, caller)) {
       case (?profile) { ?profile };
       case (null) {
-        // If not found, try to find a linked profile
         findProfileByPrincipal(caller);
       };
     };
   };
 
   public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
-    // AUTHORIZATION: Anonymous principals cannot view profiles
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot view profiles");
     };
-    // AUTHORIZATION: Users can only view their own profile or admins can view any
     if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
       Debug.trap("Unauthorized: Can only view your own profile");
     };
@@ -169,12 +179,14 @@ actor DigitalForgeICP {
   };
 
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    // AUTHORIZATION: Prevent anonymous principals from creating profiles
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot save profiles");
     };
 
-    // AUTHORIZATION: Validate and sanitize profile data
+    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
+      Debug.trap("Unauthorized: Only users can save profiles");
+    };
+
     let sanitizedName = sanitizeText(profile.name);
     let sanitizedUsername = sanitizeText(profile.username);
     let sanitizedEmail = sanitizeText(profile.email);
@@ -205,21 +217,17 @@ actor DigitalForgeICP {
       linkedPrincipals = [caller];
     };
 
-    // Check if this principal is already linked to another profile
     switch (findProfileByPrincipal(caller)) {
       case (?_existingProfile) {
-        // Update the existing profile with new data and link the principal
         let updatedProfile = linkPrincipalToProfile(sanitizedProfile, caller);
         userProfiles := OrderedMap.Make<Principal>(Principal.compare).put(userProfiles, caller, updatedProfile);
       };
       case (null) {
-        // Create a new profile and link the principal
         userProfiles := OrderedMap.Make<Principal>(Principal.compare).put(userProfiles, caller, sanitizedProfile);
       };
     };
   };
 
-  // Token Factory Types
   public type TokenMetadata = {
     name : Text;
     symbol : Text;
@@ -378,18 +386,15 @@ actor DigitalForgeICP {
     totalUsers : Nat;
   };
 
-  // Token Factory Storage
   var tokenRegistry = OrderedMap.Make<Text>(Text.compare).empty<TokenMetadata>();
   var paymentRecords = OrderedMap.Make<Nat>(Nat.compare).empty<PaymentRecord>();
   var nextPaymentId : Nat = 0;
 
-  // Track user interactions to prevent abuse
   var userLikes = OrderedMap.Make<Text>(Text.compare).empty<[Text]>();
   var lastViewIncrement = OrderedMap.Make<Text>(Text.compare).empty<Time.Time>();
   var lastCommentTime = OrderedMap.Make<Text>(Text.compare).empty<Time.Time>();
   var lastPaymentTime = OrderedMap.Make<Text>(Text.compare).empty<Time.Time>();
 
-  // Track total interactions per user to prevent spam
   var userTotalLikes = OrderedMap.Make<Text>(Text.compare).empty<Nat>();
   var userTotalComments = OrderedMap.Make<Text>(Text.compare).empty<Nat>();
   var userTotalViews = OrderedMap.Make<Text>(Text.compare).empty<Nat>();
@@ -398,7 +403,6 @@ actor DigitalForgeICP {
   let MAX_COMMENTS_PER_USER : Nat = 500;
   let MAX_VIEWS_PER_USER_PER_DAY : Nat = 10000;
 
-  // Helper function to validate principal text format
   func isValidPrincipal(principalText : Text) : Bool {
     if (Text.size(principalText) == 0 or Text.size(principalText) > 100) {
       return false;
@@ -408,7 +412,6 @@ actor DigitalForgeICP {
     };
   };
 
-  // Helper function to calculate total buy and sell tax from module configs
   func calculateTotalTax(moduleConfigs : [ModuleConfig]) : (Nat, Nat) {
     var totalBuyTax : Nat = 0;
     var totalSellTax : Nat = 0;
@@ -419,7 +422,6 @@ actor DigitalForgeICP {
     (totalBuyTax, totalSellTax);
   };
 
-  // Helper function to count treasury configurations for a user
   func countTreasuryConfigs(creator : Principal) : Nat {
     var count : Nat = 0;
     for ((_, metadata) in OrderedMap.Make<Text>(Text.compare).entries(tokenRegistry)) {
@@ -435,7 +437,6 @@ actor DigitalForgeICP {
     count;
   };
 
-  // Helper function to calculate total fees paid by a user
   func calculateTotalFeesPaid(payer : Principal) : Nat {
     var total : Nat = 0;
     for ((_, record) in OrderedMap.Make<Nat>(Nat.compare).entries(paymentRecords)) {
@@ -446,36 +447,29 @@ actor DigitalForgeICP {
     total;
   };
 
-  // Helper function to release payment lock safely
   func releasePaymentLock(paymentId : Nat) {
     paymentLocks := OrderedMap.Make<Nat>(Nat.compare).delete(paymentLocks, paymentId);
   };
 
-  // Token Factory Functions
   public shared ({ caller }) func registerToken(metadata : TokenMetadata) : async () {
-    // AUTHORIZATION: Ensure system is initialized
     if (not isInitialized) {
       Debug.trap("Unauthorized: Access control not initialized");
     };
 
-    // AUTHORIZATION: Prevent anonymous principals
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot register tokens");
     };
 
-    // AUTHORIZATION: Only admins can register tokens directly
     if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
       Debug.trap("Unauthorized: Only admins can register tokens directly");
     };
 
-    // AUTHORIZATION: Developer wallet bypass for mint fee requirement
     if (not isDeveloperWallet(metadata.creator)) {
       if (not metadata.mintFeePaid) {
         Debug.trap("Unauthorized: Mint fee must be paid before registering token");
       };
     };
 
-    // AUTHORIZATION: Validate tax ranges
     if (metadata.totalBuyTax < MIN_TOTAL_TAX or metadata.totalBuyTax > MAX_TOTAL_TAX) {
       Debug.trap("Total buy tax must be between 0.25% and 25%");
     };
@@ -483,7 +477,6 @@ actor DigitalForgeICP {
       Debug.trap("Total sell tax must be between 0.25% and 25%");
     };
 
-    // AUTHORIZATION: Validate creator is not anonymous
     if (Principal.isAnonymous(metadata.creator)) {
       Debug.trap("Unauthorized: Token creator cannot be anonymous");
     };
@@ -492,15 +485,12 @@ actor DigitalForgeICP {
   };
 
   public query ({ caller }) func getToken(symbol : Text) : async ?TokenMetadata {
-    // AUTHORIZATION: Allow viewing if token is public in community explorer, OR caller is creator, OR caller is admin
     switch (OrderedMap.Make<Text>(Text.compare).get(tokenRegistry, symbol)) {
       case (null) { null };
       case (?metadata) {
-        // Public tokens in community explorer can be viewed by anyone (including guests)
         if (metadata.communityExplorer and metadata.status == #active) {
           ?metadata;
         } else {
-          // Private tokens require authentication and ownership/admin
           if (Principal.isAnonymous(caller)) {
             Debug.trap("Unauthorized: Anonymous users cannot view private tokens");
           };
@@ -517,7 +507,17 @@ actor DigitalForgeICP {
     };
   };
 
-  public query func getAllTokens() : async [TokenMetadata] {
+  // Admin-only: returns all tokens including private ones
+  public query ({ caller }) func getAllTokens() : async [TokenMetadata] {
+    if (not isInitialized) {
+      Debug.trap("Unauthorized: Access control not initialized");
+    };
+    if (Principal.isAnonymous(caller)) {
+      Debug.trap("Unauthorized: Anonymous users cannot list all tokens");
+    };
+    if (not (AccessControl.hasPermission(accessControlState, caller, #admin))) {
+      Debug.trap("Unauthorized: Only admins can list all tokens");
+    };
     var tokens : [TokenMetadata] = [];
     for ((_, metadata) in OrderedMap.Make<Text>(Text.compare).entries(tokenRegistry)) {
       tokens := Array.append(tokens, [metadata]);
@@ -525,7 +525,7 @@ actor DigitalForgeICP {
     tokens;
   };
 
-  // Public community explorer - no authentication required for discovery
+  // Public: returns only community-explorer active tokens
   public query func getForgedTokens() : async [TokenMetadata] {
     var tokens : [TokenMetadata] = [];
     for ((_, metadata) in OrderedMap.Make<Text>(Text.compare).entries(tokenRegistry)) {
@@ -536,16 +536,13 @@ actor DigitalForgeICP {
     tokens;
   };
 
-  // Token lookup by canister ID - public for community discovery
   public query func lookupToken(canisterId : Text) : async ?TokenMetadata {
-    // AUTHORIZATION: Validate canister ID format to prevent injection
     if (not isValidPrincipal(canisterId)) {
       return null;
     };
 
     for ((_, metadata) in OrderedMap.Make<Text>(Text.compare).entries(tokenRegistry)) {
       if (Principal.toText(metadata.canisterId) == canisterId) {
-        // Only return if token is public in community explorer
         if (metadata.communityExplorer and metadata.status == #active) {
           return ?metadata;
         };
@@ -554,9 +551,7 @@ actor DigitalForgeICP {
     null;
   };
 
-  // User activity metrics - users can only view their own metrics
   public query ({ caller }) func getUserActivityMetrics() : async UserActivityMetrics {
-    // AUTHORIZATION: Only authenticated users can view activity metrics
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot view activity metrics");
     };
@@ -585,7 +580,6 @@ actor DigitalForgeICP {
     };
   };
 
-  // Global platform statistics - public for all users including guests
   public query func getGlobalPlatformStats() : async GlobalPlatformStats {
     var totalTokensCreated : Nat = 0;
     var totalSupplyAcrossTokens : Nat = 0;
@@ -619,7 +613,6 @@ actor DigitalForgeICP {
 
   public shared ({ caller }) func recordPayment(amount : Nat, treasuryAddress : Text) : async PaymentResult {
     try {
-      // AUTHORIZATION: Only authenticated users can record payments
       if (Principal.isAnonymous(caller)) {
         return #error { message = "Unauthorized: Anonymous users cannot record payments" };
       };
@@ -627,24 +620,20 @@ actor DigitalForgeICP {
         return #error { message = "Unauthorized: Only authenticated users can record payments" };
       };
 
-      // AUTHORIZATION: Developer wallet is exempt from payment requirements
       if (isDeveloperWallet(caller)) {
         return #error { message = "Developer wallet is exempt from mint fees" };
       };
 
-      // AUTHORIZATION: Validate payment amount EXACTLY before recording
       if (amount != MINT_FEE_AMOUNT) {
         logError("recordPayment", "Invalid payment amount: " # Nat.toText(amount), caller);
         return #error { message = "Unauthorized: Payment amount must be exactly 1 ICP (1,000,000,000 e8s)" };
       };
 
-      // AUTHORIZATION: Validate treasury address matches the required address EXACTLY
       if (treasuryAddress != TREASURY_ADDRESS) {
         logError("recordPayment", "Invalid treasury address: " # treasuryAddress, caller);
         return #error { message = "Unauthorized: Payments must be sent to the official treasury wallet" };
       };
 
-      // AUTHORIZATION: Rate limiting to prevent spam
       let callerText = Principal.toText(caller);
       let now = Time.now();
       let minInterval : Time.Time = 5_000_000_000; // 5 seconds
@@ -729,7 +718,6 @@ actor DigitalForgeICP {
     var paymentIdToUse : ?Nat = null;
 
     try {
-      // AUTHORIZATION: Only authenticated users can create tokens
       if (Principal.isAnonymous(caller)) {
         return #error { message = "Unauthorized: Anonymous users cannot create tokens" };
       };
@@ -737,7 +725,6 @@ actor DigitalForgeICP {
         return #error { message = "Unauthorized: Only authenticated users can create tokens" };
       };
 
-      // AUTHORIZATION: Rate limiting for token creation
       let callerText = Principal.toText(caller);
       let now = Time.now();
       switch (OrderedMap.Make<Text>(Text.compare).get(lastTokenCreation, callerText)) {
@@ -749,7 +736,6 @@ actor DigitalForgeICP {
         case (null) {};
       };
 
-      // AUTHORIZATION: Validate and sanitize token name and symbol first (needed for payment marking)
       let sanitizedName = sanitizeText(config.name);
       let sanitizedSymbol = sanitizeText(config.symbol);
 
@@ -760,92 +746,77 @@ actor DigitalForgeICP {
         return #error { message = "Token symbol must be between 1 and 10 characters" };
       };
 
-      // AUTHORIZATION: Prevent duplicate token symbols
       switch (OrderedMap.Make<Text>(Text.compare).get(tokenRegistry, sanitizedSymbol)) {
         case (?_) { return #error { message = "Token with this symbol already exists" } };
         case (null) {};
       };
 
-      // AUTHORIZATION: Validate total supply is reasonable
       if (config.totalSupply == 0 or config.totalSupply > 1_000_000_000_000_000) {
         return #error { message = "Total supply must be between 1 and 1 quadrillion" };
       };
 
-      // AUTHORIZATION: Validate decimals
       if (config.decimals > 18) {
         return #error { message = "Decimals cannot exceed 18" };
       };
 
-      // AUTHORIZATION: CRITICAL - Verify payment before allowing token creation
       let mintFeePaid = if (isDeveloperWallet(caller)) {
         Debug.print("Developer wallet creating token - fee exempt | Caller: " # Principal.toText(caller));
-        true; // Developer wallet is exempt
+        true;
       } else {
-        // Non-developer users MUST provide a valid, verified, unused payment
         switch (config.paymentId) {
           case (null) {
             logError("createToken", "No payment ID provided", caller);
             return #error { message = "Unauthorized: Payment ID required for token creation" };
           };
           case (?paymentId) {
-            // AUTHORIZATION: Check if payment is already locked (race condition prevention)
             switch (OrderedMap.Make<Nat>(Nat.compare).get(paymentLocks, paymentId)) {
               case (?true) {
                 logError("createToken", "Payment already locked - PaymentID: " # Nat.toText(paymentId), caller);
                 return #error { message = "Unauthorized: Payment is already being used by another transaction" };
               };
               case (_) {
-                // Lock the payment to prevent concurrent usage
                 paymentLocks := OrderedMap.Make<Nat>(Nat.compare).put(paymentLocks, paymentId, true);
               };
             };
 
             switch (OrderedMap.Make<Nat>(Nat.compare).get(paymentRecords, paymentId)) {
               case (null) {
-                // Release lock on error
                 releasePaymentLock(paymentId);
                 logError("createToken", "Payment record not found - PaymentID: " # Nat.toText(paymentId), caller);
                 return #error { message = "Unauthorized: Payment record not found" };
               };
               case (?record) {
-                // AUTHORIZATION: CRITICAL - Verify payment ownership matches caller
                 if (record.payer != caller) {
                   releasePaymentLock(paymentId);
                   logError("createToken", "Payment ownership mismatch - PaymentID: " # Nat.toText(paymentId) # " | Payer: " # Principal.toText(record.payer), caller);
                   return #error { message = "Unauthorized: Payment does not belong to caller" };
                 };
-                // AUTHORIZATION: Verify payment is verified by admin
                 if (not record.verified) {
                   releasePaymentLock(paymentId);
                   logError("createToken", "Payment not verified - PaymentID: " # Nat.toText(paymentId), caller);
                   return #error { message = "Unauthorized: Payment not yet verified by admin. Please wait for admin verification." };
                 };
-                // AUTHORIZATION: Verify payment amount EXACTLY
                 if (record.amount != MINT_FEE_AMOUNT) {
                   releasePaymentLock(paymentId);
                   logError("createToken", "Invalid payment amount - PaymentID: " # Nat.toText(paymentId) # " | Amount: " # Nat.toText(record.amount), caller);
                   return #error { message = "Unauthorized: Payment amount does not match required mint fee (1 ICP)" };
                 };
-                // AUTHORIZATION: Verify treasury address EXACTLY
                 if (record.treasuryAddressUsed != TREASURY_ADDRESS) {
                   releasePaymentLock(paymentId);
                   logError("createToken", "Invalid treasury address - PaymentID: " # Nat.toText(paymentId) # " | Address: " # record.treasuryAddressUsed, caller);
                   return #error { message = "Unauthorized: Payment was not sent to the correct treasury address" };
                 };
-                // AUTHORIZATION: Verify payment hasn't been used
                 if (record.usedForToken) {
                   releasePaymentLock(paymentId);
                   logError("createToken", "Payment already used - PaymentID: " # Nat.toText(paymentId), caller);
                   return #error { message = "Unauthorized: Payment has already been used for another token" };
                 };
-                // AUTHORIZATION: Verify payment is recent
                 if (now - record.timestamp > PAYMENT_VALIDITY_WINDOW) {
                   releasePaymentLock(paymentId);
                   logError("createToken", "Payment expired - PaymentID: " # Nat.toText(paymentId) # " | Timestamp: " # Int.toText(record.timestamp), caller);
                   return #error { message = "Unauthorized: Payment has expired (must be used within 1 hour of verification)" };
                 };
 
-                // Mark payment as used IMMEDIATELY to prevent race conditions
                 let updatedPayment : PaymentRecord = {
                   payer = record.payer;
                   amount = record.amount;
@@ -861,26 +832,22 @@ actor DigitalForgeICP {
 
                 Debug.print("Payment verified and marked as used - PaymentID: " # Nat.toText(paymentId) # " | Caller: " # Principal.toText(caller) # " | Symbol: " # sanitizedSymbol);
 
-                true; // Payment verified and marked as used
+                true;
               };
             };
           };
         };
       };
 
-      // AUTHORIZATION: Validate treasury fee configuration
       if (config.treasuryFee.enabled) {
         if (config.treasuryFee.buyFee > 5000 or config.treasuryFee.sellFee > 5000) {
-          // Release payment lock on error
           switch (paymentIdToUse) {
             case (?pid) { releasePaymentLock(pid) };
             case (null) {};
           };
           return #error { message = "Treasury fees cannot exceed 50% (5000 basis points)" };
         };
-        // AUTHORIZATION: Validate treasury address format if provided
         if (config.treasuryFee.treasuryAddress != "" and not isValidPrincipal(config.treasuryFee.treasuryAddress)) {
-          // Release payment lock on error
           switch (paymentIdToUse) {
             case (?pid) { releasePaymentLock(pid) };
             case (null) {};
@@ -889,11 +856,8 @@ actor DigitalForgeICP {
         };
       };
 
-      // AUTHORIZATION: Validate module configurations
       for (moduleConfig in Iter.fromArray(config.moduleConfigs)) {
-        // AUTHORIZATION: Validate tax percentages
         if (moduleConfig.buyTax > 5000 or moduleConfig.sellTax > 5000) {
-          // Release payment lock on error
           switch (paymentIdToUse) {
             case (?pid) { releasePaymentLock(pid) };
             case (null) {};
@@ -901,11 +865,9 @@ actor DigitalForgeICP {
           return #error { message = "Module tax cannot exceed 50% (5000 basis points)" };
         };
 
-        // Validate reward token addresses for Yield modules
         switch (moduleConfig.rewardTokenAddress) {
           case (?address) {
             if (address != "" and not isValidPrincipal(address)) {
-              // Release payment lock on error
               switch (paymentIdToUse) {
                 case (?pid) { releasePaymentLock(pid) };
                 case (null) {};
@@ -916,11 +878,9 @@ actor DigitalForgeICP {
           case (null) {};
         };
 
-        // AUTHORIZATION: Validate token addresses for Support modules
         switch (moduleConfig.tokenAddress) {
           case (?address) {
             if (address != "" and not isValidPrincipal(address)) {
-              // Release payment lock on error
               switch (paymentIdToUse) {
                 case (?pid) { releasePaymentLock(pid) };
                 case (null) {};
@@ -932,11 +892,9 @@ actor DigitalForgeICP {
         };
       };
 
-      // AUTHORIZATION: Validate tax totals
       let (totalBuyTax, totalSellTax) = calculateTotalTax(config.moduleConfigs);
 
       if (totalBuyTax < MIN_TOTAL_TAX or totalBuyTax > MAX_TOTAL_TAX) {
-        // Release payment lock on error
         switch (paymentIdToUse) {
           case (?pid) { releasePaymentLock(pid) };
           case (null) {};
@@ -944,7 +902,6 @@ actor DigitalForgeICP {
         return #error { message = "Total buy tax must be between 0.25% and 25%" };
       };
       if (totalSellTax < MIN_TOTAL_TAX or totalSellTax > MAX_TOTAL_TAX) {
-        // Release payment lock on error
         switch (paymentIdToUse) {
           case (?pid) { releasePaymentLock(pid) };
           case (null) {};
@@ -952,7 +909,6 @@ actor DigitalForgeICP {
         return #error { message = "Total sell tax must be between 0.25% and 25%" };
       };
 
-      // Update reflection modules to use the token's own canister ID (caller)
       let updatedModuleConfigs = Array.map<ModuleConfig, ModuleConfig>(
         config.moduleConfigs,
         func(moduleConfig : ModuleConfig) : ModuleConfig {
@@ -968,8 +924,6 @@ actor DigitalForgeICP {
         },
       );
 
-      // AUTHORIZATION: Always use authenticated caller as creator (ignore config.creator from frontend)
-      // AUTHORIZATION: Developer wallet gets special whitelist flag
       let metadata : TokenMetadata = {
         name = sanitizedName;
         symbol = sanitizedSymbol;
@@ -1026,7 +980,6 @@ actor DigitalForgeICP {
       tokenRegistry := OrderedMap.Make<Text>(Text.compare).put(tokenRegistry, sanitizedSymbol, metadata);
       lastTokenCreation := OrderedMap.Make<Text>(Text.compare).put(lastTokenCreation, callerText, now);
 
-      // Release payment lock after successful token creation
       switch (paymentIdToUse) {
         case (?pid) { releasePaymentLock(pid) };
         case (null) {};
@@ -1039,7 +992,6 @@ actor DigitalForgeICP {
         canisterId = Principal.toText(caller);
       };
     } catch (e) {
-      // Release payment lock on any error
       switch (paymentIdToUse) {
         case (?pid) { releasePaymentLock(pid) };
         case (null) {};
@@ -1057,12 +1009,10 @@ actor DigitalForgeICP {
 
   public shared ({ caller }) func verifyPaymentWithLedger(transactionId : Text, paymentId : Nat) : async VerifyPaymentResult {
     try {
-      // AUTHORIZATION: Ensure system is initialized
       if (not isInitialized) {
         return #error { message = "Unauthorized: Access control not initialized" };
       };
 
-      // AUTHORIZATION: Only admins can verify payments with ledger (prevents user manipulation)
       if (Principal.isAnonymous(caller)) {
         return #error { message = "Unauthorized: Anonymous users cannot verify payments with ledger" };
       };
@@ -1070,89 +1020,82 @@ actor DigitalForgeICP {
         return #error { message = "Unauthorized: Only admins can verify payments with ledger" };
       };
 
-      // AUTHORIZATION: Validate transaction ID format
       if (Text.size(transactionId) == 0 or Text.size(transactionId) > 100) {
         return #error { message = "Invalid transaction ID format" };
       };
 
-      // Verify payment exists
-      let record = switch (OrderedMap.Make<Nat>(Nat.compare).get(paymentRecords, paymentId)) {
+      switch (OrderedMap.Make<Nat>(Nat.compare).get(paymentRecords, paymentId)) {
         case (null) {
           logError("verifyPaymentWithLedger", "Payment record not found - PaymentID: " # Nat.toText(paymentId), caller);
           return #error { message = "Payment record not found" };
         };
-        case (?r) { r };
-      };
+        case (?record) {
+          if (record.verified) {
+            return #error { message = "Payment already verified" };
+          };
 
-      // AUTHORIZATION: Prevent re-verification
-      if (record.verified) {
-        return #error { message = "Payment already verified" };
-      };
+          if (record.amount != MINT_FEE_AMOUNT) {
+            logError("verifyPaymentWithLedger", "Invalid payment amount - PaymentID: " # Nat.toText(paymentId) # " | Amount: " # Nat.toText(record.amount), caller);
+            return #error { message = "Payment amount does not match required mint fee (1 ICP)" };
+          };
 
-      // AUTHORIZATION: Validate payment amount EXACTLY
-      if (record.amount != MINT_FEE_AMOUNT) {
-        logError("verifyPaymentWithLedger", "Invalid payment amount - PaymentID: " # Nat.toText(paymentId) # " | Amount: " # Nat.toText(record.amount), caller);
-        return #error { message = "Payment amount does not match required mint fee (1 ICP)" };
-      };
+          if (record.treasuryAddressUsed != TREASURY_ADDRESS) {
+            logError("verifyPaymentWithLedger", "Invalid treasury address - PaymentID: " # Nat.toText(paymentId) # " | Address: " # record.treasuryAddressUsed, caller);
+            return #error { message = "Payment was not sent to the correct treasury address" };
+          };
 
-      // AUTHORIZATION: Validate treasury address EXACTLY
-      if (record.treasuryAddressUsed != TREASURY_ADDRESS) {
-        logError("verifyPaymentWithLedger", "Invalid treasury address - PaymentID: " # Nat.toText(paymentId) # " | Address: " # record.treasuryAddressUsed, caller);
-        return #error { message = "Payment was not sent to the correct treasury address" };
-      };
+          if (isDeveloperWallet(record.payer)) {
+            return #error { message = "Developer wallet payments cannot be verified (exempt from fees)" };
+          };
 
-      // AUTHORIZATION: Prevent verification for developer wallet
-      if (isDeveloperWallet(record.payer)) {
-        return #error { message = "Developer wallet payments cannot be verified (exempt from fees)" };
-      };
+          if (Principal.isAnonymous(record.payer)) {
+            return #error { message = "Cannot verify payments from anonymous principals" };
+          };
 
-      // AUTHORIZATION: Prevent verification for anonymous principals
-      if (Principal.isAnonymous(record.payer)) {
-        return #error { message = "Cannot verify payments from anonymous principals" };
-      };
+          let ledgerUrl = "https://icp0.io/ledger/transaction/" # transactionId;
+          let response = await OutCall.httpGetRequest(ledgerUrl, [], transform);
 
-      let ledgerUrl = "https://icp0.io/ledger/transaction/" # transactionId;
-      let response = await OutCall.httpGetRequest(ledgerUrl, [], transform);
+          let hasSuccess = Text.contains(response, #text "success");
+          let hasCorrectAddress = Text.contains(response, #text (TREASURY_ADDRESS));
+          let hasCorrectAmount = Text.contains(response, #text (Nat.toText(MINT_FEE_AMOUNT)));
 
-      let hasSuccess = Text.contains(response, #text "success");
-      let hasCorrectAddress = Text.contains(response, #text (TREASURY_ADDRESS));
-      let hasCorrectAmount = Text.contains(response, #text (Nat.toText(MINT_FEE_AMOUNT)));
+          let isValid = hasSuccess and hasCorrectAddress and hasCorrectAmount;
 
-      let isValid = hasSuccess and hasCorrectAddress and hasCorrectAmount;
+          if (isValid) {
+            let updatedRecord : PaymentRecord = {
+              payer = record.payer;
+              amount = record.amount;
+              timestamp = record.timestamp;
+              verified = true;
+              tokenSymbol = record.tokenSymbol;
+              usedForToken = record.usedForToken;
+              treasuryAddressUsed = record.treasuryAddressUsed;
+              errorMessage = null;
+            };
+            paymentRecords := OrderedMap.Make<Nat>(Nat.compare).put(paymentRecords, paymentId, updatedRecord);
 
-      if (isValid) {
-        let updatedRecord : PaymentRecord = {
-          payer = record.payer;
-          amount = record.amount;
-          timestamp = record.timestamp;
-          verified = true;
-          tokenSymbol = record.tokenSymbol;
-          usedForToken = record.usedForToken;
-          treasuryAddressUsed = record.treasuryAddressUsed;
-          errorMessage = null;
+            Debug.print("Payment verified successfully - PaymentID: " # Nat.toText(paymentId) # " | Payer: " # Principal.toText(record.payer) # " | TransactionID: " # transactionId);
+
+            #success { message = "Payment verified successfully" };
+          } else {
+            let errorMsg = "Payment verification failed - transaction does not match requirements";
+            logError("verifyPaymentWithLedger", errorMsg # " - PaymentID: " # Nat.toText(paymentId) # " | TransactionID: " # transactionId, caller);
+
+            let updatedRecord : PaymentRecord = {
+              payer = record.payer;
+              amount = record.amount;
+              timestamp = record.timestamp;
+              verified = false;
+              tokenSymbol = record.tokenSymbol;
+              usedForToken = record.usedForToken;
+              treasuryAddressUsed = record.treasuryAddressUsed;
+              errorMessage = ?errorMsg;
+            };
+            paymentRecords := OrderedMap.Make<Nat>(Nat.compare).put(paymentRecords, paymentId, updatedRecord);
+
+            #error { message = errorMsg };
+          };
         };
-        paymentRecords := OrderedMap.Make<Nat>(Nat.compare).put(paymentRecords, paymentId, updatedRecord);
-
-        Debug.print("Payment verified successfully - PaymentID: " # Nat.toText(paymentId) # " | Payer: " # Principal.toText(record.payer) # " | TransactionID: " # transactionId);
-
-        #success { message = "Payment verified successfully" };
-      } else {
-        let errorMsg = "Payment verification failed - transaction does not match requirements";
-        logError("verifyPaymentWithLedger", errorMsg # " - PaymentID: " # Nat.toText(paymentId) # " | TransactionID: " # transactionId, caller);
-
-        let updatedRecord : PaymentRecord = {
-          payer = record.payer;
-          amount = record.amount;
-          timestamp = record.timestamp;
-          verified = false;
-          tokenSymbol = record.tokenSymbol;
-          usedForToken = record.usedForToken;
-          treasuryAddressUsed = record.treasuryAddressUsed;
-          errorMessage = ?errorMsg;
-        };
-        paymentRecords := OrderedMap.Make<Nat>(Nat.compare).put(paymentRecords, paymentId, updatedRecord);
-
-        #error { message = errorMsg };
       };
     } catch (e) {
       logError("verifyPaymentWithLedger", "Unexpected error during payment verification: " # Error.message(e), caller);
@@ -1160,12 +1103,10 @@ actor DigitalForgeICP {
     };
   };
 
-  // DEPRECATED: This function is no longer needed as payment verification happens in createToken
   public shared ({ caller }) func markMintFeePaid(symbol : Text, paymentId : Nat) : async () {
     Debug.trap("Deprecated: Payment verification now happens during token creation");
   };
 
-  // Public query - no authentication required for donation address
   public query func getBuyMeACoffeeAddress() : async Text {
     TREASURY_ADDRESS;
   };
@@ -1177,7 +1118,6 @@ actor DigitalForgeICP {
   var stripeConfig : ?Stripe.StripeConfiguration = null;
 
   public query ({ caller }) func isStripeConfigured() : async Bool {
-    // AUTHORIZATION: Only authenticated users can check Stripe configuration
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot check Stripe configuration");
     };
@@ -1188,12 +1128,10 @@ actor DigitalForgeICP {
   };
 
   public shared ({ caller }) func setStripeConfiguration(config : Stripe.StripeConfiguration) : async () {
-    // AUTHORIZATION: Ensure system is initialized
     if (not isInitialized) {
       Debug.trap("Unauthorized: Access control not initialized");
     };
 
-    // AUTHORIZATION: Only admins can set Stripe configuration
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot set Stripe configuration");
     };
@@ -1211,7 +1149,6 @@ actor DigitalForgeICP {
   };
 
   public shared ({ caller }) func getStripeSessionStatus(sessionId : Text) : async Stripe.StripeSessionStatus {
-    // AUTHORIZATION: Only authenticated users can check Stripe session status
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot check Stripe session status");
     };
@@ -1219,7 +1156,6 @@ actor DigitalForgeICP {
       Debug.trap("Unauthorized: Only authenticated users can check Stripe session status");
     };
 
-    // AUTHORIZATION: Validate session ID format
     if (Text.size(sessionId) == 0 or Text.size(sessionId) > 200) {
       Debug.trap("Invalid session ID format");
     };
@@ -1228,7 +1164,6 @@ actor DigitalForgeICP {
   };
 
   public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
-    // AUTHORIZATION: Only authenticated users can create checkout sessions
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot create checkout sessions");
     };
@@ -1236,7 +1171,6 @@ actor DigitalForgeICP {
       Debug.trap("Unauthorized: Only authenticated users can create checkout sessions");
     };
 
-    // AUTHORIZATION: Validate URLs
     if (Text.size(successUrl) == 0 or Text.size(successUrl) > 500) {
       Debug.trap("Invalid success URL");
     };
@@ -1247,9 +1181,7 @@ actor DigitalForgeICP {
     await Stripe.createCheckoutSession(getStripeConfiguration(), caller, items, successUrl, cancelUrl, transform);
   };
 
-  // New query function to get payment record by ID
   public query ({ caller }) func getPaymentRecord(paymentId : Nat) : async ?PaymentRecord {
-    // AUTHORIZATION: Only authenticated users can get payment records
     if (Principal.isAnonymous(caller)) {
       Debug.trap("Unauthorized: Anonymous users cannot get payment records");
     };
@@ -1260,7 +1192,6 @@ actor DigitalForgeICP {
     switch (OrderedMap.Make<Nat>(Nat.compare).get(paymentRecords, paymentId)) {
       case (null) { null };
       case (?record) {
-        // Only allow the payer or admin to view the record
         if (record.payer == caller or AccessControl.isAdmin(accessControlState, caller)) {
           ?record;
         } else {
@@ -1270,19 +1201,15 @@ actor DigitalForgeICP {
     };
   };
 
-  // New query function to get total token count
   public query func getTokenCount() : async Nat {
     OrderedMap.Make<Text>(Text.compare).size(tokenRegistry);
   };
 
-  // New query function to get treasury address
   public query func getTreasuryAddress() : async Text {
     TREASURY_ADDRESS;
   };
 
-  // New query function to get creation fee amount
   public query func getCreationFee() : async Nat {
     MINT_FEE_AMOUNT;
   };
 };
-

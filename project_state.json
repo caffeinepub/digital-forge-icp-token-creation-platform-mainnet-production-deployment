@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0.0",
-  "projectStateVersion": 9,
+  "projectStateVersion": 19,
   "summary": "Digital Forge ICP — A token factory platform on the Internet Computer. Single-file Motoko backend (1,819 lines) creates ForgedToken canisters on demand via IC Management Canister, collects fees via ICRC-2 approve/transferFrom on the ICP ledger, implements 6 tax mechanisms (treasury, burn, reflection, liquidity, yield, support), x404 payment rails (150 BPS additive), inline access control, rate limiting, and input sanitization. Treasury: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae.",
   "architectural_notes": [
     "Single-file Motoko backend (backend/main.mo) — no external modules, only mo:base imports",
@@ -17,7 +17,7 @@
   "known_issues": [
     "`transient` keyword is non-standard Motoko and must be adapted to standard stable/non-stable variable patterns to compile",
     "Frontend getForgedTokens() call returns undefined/non-array — mismatch between frontend actor call and backend function name or return format",
-    "TREASURY_ADDRESS and DEVELOPER_WALLET constants were set to wrong hex strings instead of the correct ICP principal"
+    "getTreasuryAddress() persistently returns old hex string 'ab6f9d02...' across 5+ deploys — hex string may be regenerated from a template/spec on every build, not just in main.mo source"
   ],
   "isFixRequest": true,
   "existing_features": [
@@ -92,18 +92,6 @@
       "status": "pending"
     },
     {
-      "id": "AR-5",
-      "summary": "Fix wrong treasury address — change TREASURY_ADDRESS and getBuyMeACoffeeAddress() from hex string to correct ICP principal: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-6",
-      "summary": "Fix wrong DEVELOPER_WALLET constant — change to iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae (same as treasury for now)",
-      "reqIds": [],
-      "status": "pending"
-    },
-    {
       "id": "AR-7",
       "summary": "Fix initializeAccessControl() lock — allow treasury principal to force-add themselves as admin without wiping existing roles, even if already initialized",
       "reqIds": [],
@@ -119,22 +107,6 @@
       "id": "AR-9",
       "summary": "Add missing backend query functions: getTokenCount() returns Nat, getTreasuryAddress() returns Text, getCreationFee() returns Nat",
       "reqIds": [],
-      "status": "pending"
-    },
-    {
-      "id": "AR-10",
-      "summary": "In backend/main.mo, change the TREASURY_ADDRESS constant and getBuyMeACoffeeAddress() return value from the incorrect hex string to the correct ICP principal: \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". This is the highest-priority fix — all fee collection depends on this being correct.",
-      "reqIds": [
-        "REQ-7"
-      ],
-      "status": "pending"
-    },
-    {
-      "id": "AR-11",
-      "summary": "In backend/main.mo, change the DEVELOPER_WALLET constant from the incorrect hex string to \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\" (same as treasury for now).",
-      "reqIds": [
-        "REQ-8"
-      ],
       "status": "pending"
     },
     {
@@ -163,7 +135,7 @@
     },
     {
       "id": "AR-15",
-      "summary": "In backend/main.mo, find and replace every occurrence of the hex string \"ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936\" with the ICP principal \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". This includes but is not limited to the TREASURY_ADDRESS constant, the getBuyMeACoffeeAddress() return value, and getTreasuryAddress() return value. No instance of the old hex string should remain anywhere in the file.",
+      "summary": "In backend/main.mo, perform a clean consolidated rewrite that eliminates every occurrence of the hex string 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' and every occurrence of 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256'. Both strings must be replaced with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae' wherever they appear — in constants, default values, function bodies (getTreasuryAddress, getBuyMeACoffeeAddress, and any other location), inline comments, or variable initializers. After the rewrite, zero instances of 'ab6f9d02' or 'f2ba368d' (as substrings) must remain anywhere in the file.",
       "reqIds": [
         "REQ-13"
       ],
@@ -171,9 +143,41 @@
     },
     {
       "id": "AR-16",
-      "summary": "In backend/main.mo, replace the DEVELOPER_WALLET constant value \"f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256\" with the ICP principal \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\". No instance of the old developer wallet hex string should remain in the file.",
+      "summary": "In backend/main.mo, hardcode the principal 'r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae' as a permanent admin. This principal must be assigned the admin role at actor initialization and must not be removable through any access control function. The hardcoded admin assignment must survive upgrades and re-deployments.",
       "reqIds": [
         "REQ-14"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-17",
+      "summary": "Ensure the consolidated rewrite of backend/main.mo preserves all existing functionality without regression: MINT_FEE_AMOUNT=1_000_000_000, MIN_TOTAL_TAX=25, MAX_TOTAL_TAX=2500, PAYMENT_VALIDITY_WINDOW=3_600_000_000_000, TOKEN_CREATION_RATE_LIMIT=30_000_000_000 constants must remain unchanged; all six tax mechanisms (treasury, burn, reflection, liquidity, yield, support) must remain intact; x404 payment rails (150 BPS additive) must remain intact; ICRC-2 approve/transferFrom fee collection must remain intact; rate limiting and input sanitization must remain intact; all previously added query functions (getTokenCount, getTreasuryAddress, getCreationFee, getAllTokens) must remain present and functional; the transient keyword fix (replacing transient with standard non-stable var declarations) applied in earlier builds must be preserved.",
+      "reqIds": [
+        "REQ-15"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-18",
+      "summary": "In backend/main.mo, perform a complete search-and-replace of every occurrence of the hex strings 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' and 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256' (and any substring thereof, including shortened versions like 'ab6f9d02' or 'f2ba368d') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This replacement must cover every location in the file: constants, variable initializers, function bodies (getTreasuryAddress, getBuyMeACoffeeAddress, and any other function), default values, and inline comments. After the rewrite, zero instances of either hex string (or their substrings) must remain anywhere in backend/main.mo. All other logic, constants (MINT_FEE_AMOUNT=1_000_000_000, MIN_TOTAL_TAX=25, MAX_TOTAL_TAX=2500, PAYMENT_VALIDITY_WINDOW=3_600_000_000_000, TOKEN_CREATION_RATE_LIMIT=30_000_000_000), tax mechanisms, payment rails, access control, rate limiting, and query functions must remain completely unchanged.",
+      "reqIds": [
+        "REQ-16"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-19",
+      "summary": "In backend/main.mo, perform an exhaustive search-and-replace of EVERY occurrence of the hex string 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' (and any substring or shortened form such as 'ab6f9d02') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This covers constants, variable initializers, function bodies (getTreasuryAddress, getBuyMeACoffeeAddress, and any other function), default values, and inline comments. Zero instances of 'ab6f9d02' as a substring must remain anywhere in the file after this change.",
+      "reqIds": [
+        "REQ-17"
+      ],
+      "status": "pending"
+    },
+    {
+      "id": "AR-20",
+      "summary": "In backend/main.mo, perform an exhaustive search-and-replace of EVERY occurrence of the hex string 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256' (and any substring or shortened form such as 'f2ba368d') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This covers constants, variable initializers, function bodies, default values, and inline comments. Zero instances of 'f2ba368d' as a substring must remain anywhere in the file after this change.",
+      "reqIds": [
+        "REQ-18"
       ],
       "status": "pending"
     }

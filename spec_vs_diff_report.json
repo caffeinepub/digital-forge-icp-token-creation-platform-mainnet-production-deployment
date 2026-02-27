@@ -1,11 +1,11 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-02-26T20:57:44.240Z",
-  "summary": "Both REQ-13 and REQ-14 appear to be fully implemented in backend/main.mo. The TREASURY_ADDRESS constant is set to the new ICP principal, the DEVELOPER_WALLET constant is set to the new ICP principal, and no old hex strings are visible in the diff. The project_state.json summary also references the new treasury principal, confirming the change.",
+  "generatedAt": "2026-02-26T23:59:46.787Z",
+  "summary": "The diff shows backend/main.mo has been modified. The visible portion of the file shows TREASURY_ADDRESS and DEVELOPER_WALLET constants now contain the correct ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae', and the project_state.json summary also references that same principal as the treasury. The hex strings 'ab6f9d02' and 'f2ba368d' do not appear in the visible diff content. However, because the diff is truncated (only ~4000 chars visible out of what is described as an 1819-line file), we cannot fully verify that zero instances remain throughout the entire file. The constants MINT_FEE_AMOUNT, MIN_TOTAL_TAX, MAX_TOTAL_TAX, PAYMENT_VALIDITY_WINDOW, TOKEN_CREATION_RATE_LIMIT, and the hardcoded admin principal all appear intact in the visible portion.",
   "missing_requirements": [],
   "hallucinated_features": [],
-  "confidence": 0.9,
+  "confidence": 0.72,
   "changed_files": [
     "backend/main.mo",
     "project_state.json"
