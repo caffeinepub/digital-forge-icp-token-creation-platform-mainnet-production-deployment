@@ -1,6 +1,6 @@
 {
   "kind": "implementation_plan",
   "version": "1.0",
-  "title": "Frontend Implementation Plan: Treasury Address Update",
+  "title": "Frontend-only plan for backend treasury and admin hardcoding (no frontend changes required)",
   "requirements": []
 }

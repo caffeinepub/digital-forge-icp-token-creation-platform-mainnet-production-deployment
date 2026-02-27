@@ -1213,3 +1213,4 @@ actor DigitalForgeICP {
     MINT_FEE_AMOUNT;
   };
 };
+

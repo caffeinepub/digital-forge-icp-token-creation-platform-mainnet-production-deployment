@@ -1,61 +1,99 @@
 {
   "kind": "build_request",
-  "title": "Hard-replace all hex treasury strings in backend/main.mo with correct ICP principal",
-  "projectName": "Digital Forge ICP",
+  "title": "Hardcode correct treasury principal and permanent admin in backend/main.mo",
+  "projectName": "Digital Forge",
   "priority": "high",
   "requirements": [
     {
-      "id": "REQ-17",
-      "text": "In backend/main.mo, perform an exhaustive search-and-replace of EVERY occurrence of the hex string 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' (and any substring or shortened form such as 'ab6f9d02') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This covers constants, variable initializers, function bodies (getTreasuryAddress, getBuyMeACoffeeAddress, and any other function), default values, and inline comments. Zero instances of 'ab6f9d02' as a substring must remain anywhere in the file after this change.",
+      "id": "REQ-19",
+      "text": "In backend/main.mo, replace every occurrence of the hex string 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' (and any substring such as 'ab6f9d02') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This must cover: the treasuryAddress constant/variable declaration, the body of getTreasuryAddress(), the body of getBuyMeACoffeeAddress(), any inline comments, and any other location in the file. After the change, zero occurrences of the substring 'ab6f9d02' must remain anywhere in the file.",
       "target": "backend",
       "source": {
         "messageIds": [
           "msg-latest"
         ],
         "quotes": [
-          "search for this exact text: ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936 And replace it with this exact text: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae",
-          "Do 'Replace All' so every single instance is caught."
+          "Replace the ENTIRE function with this exact code: public query func getTreasuryAddress() : async Text { \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\" };",
+          "Do a final search across the entire file for \"ab6f9d02\" — if ANY remain, replace them with \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\""
         ]
       },
       "acceptanceCriteria": [
-        "A grep/search of backend/main.mo for 'ab6f9d02' returns zero matches",
-        "A grep/search of backend/main.mo for 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' returns zero matches",
-        "getTreasuryAddress() returns 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae' after deploy",
-        "All other constants and logic (MINT_FEE_AMOUNT, tax mechanisms, payment rails, access control) remain unchanged"
+        "getTreasuryAddress() returns exactly 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'",
+        "getBuyMeACoffeeAddress() returns exactly 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'",
+        "The treasuryAddress constant is declared as: private let treasuryAddress : Text = \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\"",
+        "Zero occurrences of the substring 'ab6f9d02' exist anywhere in backend/main.mo"
       ]
     },
     {
-      "id": "REQ-18",
-      "text": "In backend/main.mo, perform an exhaustive search-and-replace of EVERY occurrence of the hex string 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256' (and any substring or shortened form such as 'f2ba368d') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This covers constants, variable initializers, function bodies, default values, and inline comments. Zero instances of 'f2ba368d' as a substring must remain anywhere in the file after this change.",
+      "id": "REQ-20",
+      "text": "In backend/main.mo, replace every occurrence of the hex string 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256' (and any substring such as 'f2ba368d') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This must cover the developerAddress constant/variable declaration, any function bodies, inline comments, and any other location in the file. After the change, zero occurrences of the substring 'f2ba368d' must remain anywhere in the file.",
       "target": "backend",
       "source": {
         "messageIds": [
           "msg-latest"
         ],
         "quotes": [
-          "Do the same for this text: f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256 Replace all with the same: iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae"
+          "Find any constant or variable for the developer address. It probably stores \"f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256\". Replace it with: private let developerAddress : Text = \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\";",
+          "Same for \"f2ba368d\""
         ]
       },
       "acceptanceCriteria": [
-        "A grep/search of backend/main.mo for 'f2ba368d' returns zero matches",
-        "A grep/search of backend/main.mo for 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256' returns zero matches",
-        "All other constants and logic remain unchanged",
-        "The file compiles without errors after the replacement"
+        "The developerAddress constant is declared as: private let developerAddress : Text = \"iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae\"",
+        "Zero occurrences of the substring 'f2ba368d' exist anywhere in backend/main.mo"
+      ]
+    },
+    {
+      "id": "REQ-21",
+      "text": "In backend/main.mo, hardcode the principal 'r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae' as a permanent admin. This principal must be assigned the admin role wherever initializeAccessControl sets up admin roles (or in the actor's initialization block), must survive upgrades and re-deployments, and must not be removable through any access control function. Existing roles and access control assignments must not be disturbed.",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-latest"
+        ],
+        "quotes": [
+          "Add this principal as admin wherever initializeAccessControl sets up admin roles: r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae"
+        ]
+      },
+      "acceptanceCriteria": [
+        "Principal 'r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae' is assigned the admin role at actor initialization",
+        "The assignment is present as a hardcoded entry and cannot be removed by any runtime access control call",
+        "All existing access control assignments and other admin principals remain untouched"
+      ]
+    },
+    {
+      "id": "REQ-22",
+      "text": "Verify that all other critical constants and functionality in backend/main.mo remain completely unchanged after applying REQ-19 through REQ-21: MINT_FEE_AMOUNT=1_000_000_000, MIN_TOTAL_TAX=25, MAX_TOTAL_TAX=2500, PAYMENT_VALIDITY_WINDOW=3_600_000_000_000, TOKEN_CREATION_RATE_LIMIT=30_000_000_000, all six tax mechanisms (treasury, burn, reflection, liquidity, yield, support), x404 payment rails (150 BPS additive), ICRC-2 approve/transferFrom fee collection, rate limiting, input sanitization, getTokenCount(), getTreasuryAddress(), getCreationFee(), getAllTokens(), and the transient-keyword fix (non-stable var declarations for paymentLockMap and creationTimeMap).",
+      "target": "backend",
+      "source": {
+        "messageIds": [
+          "msg-latest"
+        ],
+        "quotes": [
+          "Deploy. Do not regenerate the file. Deploy the patched version as-is."
+        ]
+      },
+      "acceptanceCriteria": [
+        "MINT_FEE_AMOUNT equals 1_000_000_000",
+        "MIN_TOTAL_TAX equals 25 and MAX_TOTAL_TAX equals 2500",
+        "PAYMENT_VALIDITY_WINDOW equals 3_600_000_000_000 and TOKEN_CREATION_RATE_LIMIT equals 30_000_000_000",
+        "All six tax mechanisms compile and are present",
+        "getTokenCount(), getTreasuryAddress(), getCreationFee(), and getAllTokens() are all present and callable",
+        "No use of the transient keyword remains in the file",
+        "The backend actor compiles and deploys successfully"
       ]
     }
   ],
   "constraints": [
-    "Do NOT rewrite or regenerate backend/main.mo from scratch — only perform targeted find-and-replace on the two specified hex strings",
-    "Do not modify any other logic, constants, function signatures, tax mechanisms, payment rails, or access control code",
-    "MINT_FEE_AMOUNT=1_000_000_000, MIN_TOTAL_TAX=25, MAX_TOTAL_TAX=2500, PAYMENT_VALIDITY_WINDOW=3_600_000_000_000, TOKEN_CREATION_RATE_LIMIT=30_000_000_000 must remain unchanged",
-    "The hardcoded admin principal 'r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae' must remain intact",
-    "No frontend changes required for this build"
+    "Do NOT regenerate backend/main.mo from scratch or from any template — only apply targeted find-and-replace patches to the existing file",
+    "Zero occurrences of 'ab6f9d02' or 'f2ba368d' as substrings must remain in the final file",
+    "The permanent admin principal 'r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae' must not be removable at runtime",
+    "All existing logic, constants, tax mechanisms, and payment rails must be fully preserved"
   ],
   "nonGoals": [
-    "Rebuilding or regenerating backend/main.mo from a template",
-    "Changing any frontend files",
-    "Modifying any access control, tax, payment, or rate-limiting logic",
-    "Adding new features or query functions"
+    "Frontend changes of any kind",
+    "Changes to any constants other than the hex address strings being replaced",
+    "Restructuring or refactoring any backend logic beyond the specified patches",
+    "Adding new features or functions beyond those already present"
   ],
   "imageRequirements": {
     "required": [],

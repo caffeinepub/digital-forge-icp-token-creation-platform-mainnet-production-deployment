@@ -1,25 +1,39 @@
 {
   "kind": "coverage_report",
   "version": "1.0",
-  "generatedAt": "2026-02-26T23:59:46.790Z",
+  "generatedAt": "2026-02-27T00:09:28.449Z",
   "sources": {
     "buildRequest": true,
     "implementationPlan": true
   },
   "requirements": {
-    "total": 2,
+    "total": 4,
     "implemented": 0,
     "items": [
       {
-        "id": "REQ-17",
-        "summary": "In backend/main.mo, perform an exhaustive search-and-replace of EVERY occurrence of the hex string 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' (and any substring or shortened form such as 'ab6f9d02') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This covers constants, variable initializers, function bodies (getTreasuryAddress, getBuyMeACoffeeAddress, and any other function), default values, and inline comments. Zero instances of 'ab6f9d02' as a substring must remain anywhere in the file after this change.",
+        "id": "REQ-19",
+        "summary": "In backend/main.mo, replace every occurrence of the hex string 'ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936' (and any substring such as 'ab6f9d02') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This must cover: the treasuryAddress constant/variable declaration, the body of getTreasuryAddress(), the body of getBuyMeACoffeeAddress(), any inline comments, and any other location in the file. After the change, zero occurrences of the substring 'ab6f9d02' must remain anywhere in the file.",
         "status": "unknown",
         "plannedFiles": [],
         "matchedFiles": []
       },
       {
-        "id": "REQ-18",
-        "summary": "In backend/main.mo, perform an exhaustive search-and-replace of EVERY occurrence of the hex string 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256' (and any substring or shortened form such as 'f2ba368d') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This covers constants, variable initializers, function bodies, default values, and inline comments. Zero instances of 'f2ba368d' as a substring must remain anywhere in the file after this change.",
+        "id": "REQ-20",
+        "summary": "In backend/main.mo, replace every occurrence of the hex string 'f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256' (and any substring such as 'f2ba368d') with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'. This must cover the developerAddress constant/variable declaration, any function bodies, inline comments, and any other location in the file. After the change, zero occurrences of the substring 'f2ba368d' must remain anywhere in the file.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-21",
+        "summary": "In backend/main.mo, hardcode the principal 'r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae' as a permanent admin. This principal must be assigned the admin role wherever initializeAccessControl sets up admin roles (or in the actor's initialization block), must survive upgrades and re-deployments, and must not be removable through any access control function. Existing roles and access control assignments must not be disturbed.",
+        "status": "unknown",
+        "plannedFiles": [],
+        "matchedFiles": []
+      },
+      {
+        "id": "REQ-22",
+        "summary": "Verify that all other critical constants and functionality in backend/main.mo remain completely unchanged after applying REQ-19 through REQ-21: MINT_FEE_AMOUNT=1_000_000_000, MIN_TOTAL_TAX=25, MAX_TOTAL_TAX=2500, PAYMENT_VALIDITY_WINDOW=3_600_000_000_000, TOKEN_CREATION_RATE_LIMIT=30_000_000_000, all six tax mechanisms (treasury, burn, reflection, liquidity, yield, support), x404 payment rails (150 BPS additive), ICRC-2 approve/transferFrom fee collection, rate limiting, input sanitization, getTokenCount(), getTreasuryAddress(), getCreationFee(), getAllTokens(), and the transient-keyword fix (non-stable var declarations for paymentLockMap and creationTimeMap).",
         "status": "unknown",
         "plannedFiles": [],
         "matchedFiles": []

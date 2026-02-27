@@ -1,11 +1,59 @@
 {
   "kind": "spec_vs_diff_report",
   "version": "1.0",
-  "generatedAt": "2026-02-26T23:59:46.787Z",
-  "summary": "The diff shows backend/main.mo has been modified. The visible portion of the file shows TREASURY_ADDRESS and DEVELOPER_WALLET constants now contain the correct ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae', and the project_state.json summary also references that same principal as the treasury. The hex strings 'ab6f9d02' and 'f2ba368d' do not appear in the visible diff content. However, because the diff is truncated (only ~4000 chars visible out of what is described as an 1819-line file), we cannot fully verify that zero instances remain throughout the entire file. The constants MINT_FEE_AMOUNT, MIN_TOTAL_TAX, MAX_TOTAL_TAX, PAYMENT_VALIDITY_WINDOW, TOKEN_CREATION_RATE_LIMIT, and the hardcoded admin principal all appear intact in the visible portion.",
-  "missing_requirements": [],
-  "hallucinated_features": [],
-  "confidence": 0.72,
+  "generatedAt": "2026-02-27T00:09:28.446Z",
+  "summary": "The diff shows targeted modifications to backend/main.mo that address REQ-19 through REQ-21. The old hex addresses have been replaced with the ICP principal 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae', and a hardcoded admin principal 'r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae' has been added. However, due to truncation, some acceptance criteria cannot be fully verified.",
+  "missing_requirements": [
+    {
+      "id": "REQ-21",
+      "requirement": "The hardcoded admin principal must not be removable through any access control function at runtime.",
+      "reason": "The diff shows ensureHardcodedAdmin() assigns the admin role at initialization, but due to truncation it is not visible whether the removeRole or equivalent function has been patched to prevent removal of this principal at runtime.",
+      "evidence": [
+        "backend/main.mo"
+      ]
+    },
+    {
+      "id": "REQ-19",
+      "requirement": "The treasuryAddress constant must be declared exactly as: private let treasuryAddress : Text = 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'",
+      "reason": "The diff declares 'let TREASURY_ADDRESS : Text = ...' (uppercase name, no visible private modifier), which does not match the required declaration 'private let treasuryAddress : Text = ...' per the AC.",
+      "evidence": [
+        "backend/main.mo"
+      ]
+    },
+    {
+      "id": "REQ-20",
+      "requirement": "The developerAddress constant must be declared exactly as: private let developerAddress : Text = 'iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae'",
+      "reason": "The diff declares 'let DEVELOPER_WALLET : Text = ...' instead of 'private let developerAddress : Text = ...'. The variable name differs from what the AC requires.",
+      "evidence": [
+        "backend/main.mo"
+      ]
+    },
+    {
+      "id": "REQ-22",
+      "requirement": "All other critical constants and functionality must remain completely unchanged, including six tax mechanisms, x404 payment rails, ICRC-2 logic, transient-keyword fix, and named functions getTokenCount, getTreasuryAddress, getCreationFee, getAllTokens.",
+      "reason": "Due to diff truncation, preservation of all six tax mechanisms, x404 rails, transient-keyword fix, and other constants and functions cannot be fully confirmed from the visible content.",
+      "evidence": [
+        "backend/main.mo"
+      ]
+    }
+  ],
+  "hallucinated_features": [
+    {
+      "description": "Renamed constant variables to TREASURY_ADDRESS and DEVELOPER_WALLET instead of preserving original names treasuryAddress and developerAddress",
+      "reason": "The build request constraints prohibit restructuring beyond specified patches and the AC specifies exact variable names. Renaming to uppercase variants was not requested and may break existing logic referencing the original names.",
+      "evidence": [
+        "backend/main.mo"
+      ]
+    },
+    {
+      "description": "New named constant HARDCODED_ADMIN_PRINCIPAL and new helper function ensureHardcodedAdmin() introduced",
+      "reason": "While REQ-21 requires hardcoding the admin, introducing a new named constant and a new helper function goes beyond a minimal targeted patch as constrained by the build request which specifies only targeted find-and-replace patches.",
+      "evidence": [
+        "backend/main.mo"
+      ]
+    }
+  ],
+  "confidence": 0.62,
   "changed_files": [
     "backend/main.mo",
     "project_state.json"

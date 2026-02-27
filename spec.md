@@ -1,11 +1,12 @@
 # Specification
 
 ## Summary
-**Goal:** Replace all occurrences of two legacy hex treasury strings in `backend/main.mo` with the correct ICP principal.
+**Goal:** Hardcode the correct treasury principal and permanent admin in `backend/main.mo` by applying targeted find-and-replace patches to the existing file.
 
 **Planned changes:**
-- In `backend/main.mo`, find and replace every occurrence of `ab6f9d02f1930037c53b781620754e804b140732f0990cc252fc604915303936` (including any substring such as `ab6f9d02`) with `iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae`
-- In `backend/main.mo`, find and replace every occurrence of `f2ba368dff8966e6a9977354eb4c3f0f543c3cadb504dc0d4355859888bd2256` (including any substring such as `f2ba368d`) with `iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae`
-- All other logic, constants, function signatures, and access control remain untouched
+- Replace all occurrences of the hex string `ab6f9d02...` (treasuryAddress) with the ICP principal `iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae` everywhere in `backend/main.mo`, including the constant declaration, `getTreasuryAddress()`, `getBuyMeACoffeeAddress()`, and any inline comments
+- Replace all occurrences of the hex string `f2ba368d...` (developerAddress) with the same ICP principal `iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae` everywhere in `backend/main.mo`
+- Hardcode the principal `r7e75-6gjbk-2hu53-tcwcn-gppkv-2prfn-os6xt-eocak-oy4sa-qnejo-kae` as a permanent admin in `initializeAccessControl` (or the actor's initialization block), making it non-removable at runtime
+- Verify all other constants and functionality remain unchanged (`MINT_FEE_AMOUNT`, tax bounds, payment rails, rate limiting, query functions, non-stable var declarations, etc.)
 
-**User-visible outcome:** The treasury address throughout the backend now correctly resolves to the ICP principal `iyupi-26e6a-z56ra-6a5tz-yyj6i-kvxe4-joccp-pgapo-vpcvb-zxtmq-oae`, with no remaining hex treasury strings in `backend/main.mo`.
+**User-visible outcome:** The backend canister uses the correct ICP principals for treasury and developer addresses, and the specified principal is permanently assigned the admin role and cannot be removed, while all existing logic and constants remain intact.
